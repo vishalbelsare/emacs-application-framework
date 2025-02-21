@@ -1,72 +1,93 @@
 {
+  "pacman": [
+    "wmctrl",
+    "nodejs",
+    "npm",
+    "python-pyqt6-webengine",
+    "python-pyqt6",
+    "python-pyqt6-sip",
+    "qt6-multimedia",
+    "qt6-svg",
+    "libvdpau-va-gl"
+  ],
+  "guix": [
+    "wmctrl",
+    "node"
+  ],
+  "nix": [
+    "nixpkgs#wmctrl",
+    "nixpkgs#nodejs"
+  ],
+  "emerge": [
+    "x11-misc/wmctrl",
+    "dev-python/gssapi",
+    "net-libs/nodejs"
+  ],
+  "apt": [
+    "wmctrl",
+    "nodejs",
+    "npm",
+    "libxcb-cursor-dev"
+  ],
+  "dnf": [
+    "wmctrl",
+    "nodejs",
+    "npm"
+  ],
+  "pkg": [
+    "wmctrl",
+    "node",
+    "npm"
+  ],
+  "zypper": [
+    "wmctrl",
+    "nodejs16",
+    "npm16"
+  ],
+  "brew": [
+    "node"
+  ],
+  "pip": {
     "pacman": [
-        "wmctrl",
-        "python-pyqt5",
-        "python-pyqt5-sip",
-        "python-pyqtwebengine",
-        "nodejs",
-        "npm"
+      "epc",
+      "sexpdata==1.0.0",
+      "tld",
+      "lxml"
     ],
-    "apt": [
-        "wmctrl",
-        "nodejs",
-        "npm",
-        "libglib2.0-dev",
-        "python3-pyqt5",
-        "python3-sip",
-        "python3-pyqt5.qtwebengine",
-        "python3-pygit2"
+    "linux": [
+      "epc",
+      "sexpdata==1.0.0",
+      "tld",
+      "lxml",
+      "PyQt6==6.5.0",
+      "PyQt6-Qt6==6.5.0",
+      "PyQt6-sip",
+      "PyQt6-WebEngine==6.5.0",
+      "PyQt6-WebEngine-Qt6==6.5.0"
     ],
-    "dnf": [
-        "wmctrl",
-        "nodejs",
-        "npm",
-        "glib2-devel",
-        "python3-qt5",
-        "python3-pyqt5-sip",
-        "python3-qt5-webengine",
-        "pyqtwebengine-devel",
-        "python3-pygit2"
+    "win32": [
+      "epc",
+      "sexpdata==1.0.0",
+      "tld",
+      "lxml",
+      "pygetwindow",
+      "PyQt6==6.5.0",
+      "PyQt6-Qt6==6.5.0",
+      "PyQt6-sip",
+      "PyQt6-WebEngine==6.5.0",
+      "PyQt6-WebEngine-Qt6==6.5.0"
     ],
-    "pkg": [
-        "wmctrl",
-        "node",
-        "npm",
-        "glib",
-        "py38-qt5-sip",
-        "py38-qt5-webengine"
-    ],
-    "zypper": [
-        "wmctrl",
-        "nodejs16",
-        "npm16",
-        "glib2-devel",
-        "python38-qt5",
-        "python38-qt5-sip",
-        "python38-qtwebengine-qt5",
-        "python38-pygit2",
-        "libqt5-qtwebengine"
-    ],
-    "brew": [
-        "node"
-    ],
-    "pip": {
-        "linux": [
-            "epc",
-            "lxml"
-        ],
-        "win32": [
-            "pyqt5",
-            "pyqt5-sip",
-            "pyqtwebengine",
-            "pygetwindow"
-        ],
-        "darwin": [
-            "epc",
-            "pyqt5",
-            "pyqt5-sip",
-            "pyqtwebengine",
-            "mac-app-frontmost"
-        ]
-    }
+    "darwin": [
+      "epc",
+      "sexpdata==1.0.0",
+      "tld",
+      "lxml",
+      "mac-app-frontmost",
+      "PyQt6==6.5.0",
+      "PyQt6-Qt6==6.5.0",
+      "PyQt6-sip",
+      "PyQt6-WebEngine==6.5.0",
+      "PyQt6-WebEngine-Qt6==6.5.0"
+    ]
+  }
 }

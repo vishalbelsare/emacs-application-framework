@@ -19,89 +19,112 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5 import QtCore
-from PyQt5.QtGui import QKeyEvent, QCursor, QFocusEvent, QBrush, QColor
-from PyQt5.QtWidgets import QGraphicsScene, QApplication, qApp
-from PyQt5.QtCore import Qt, QEvent, QThread
-from core.utils import interactive, abstract, get_clipboard_text, set_clipboard_text, eval_in_emacs, message_to_emacs, input_message, get_emacs_vars, get_emacs_var, get_emacs_func_result, get_emacs_theme_mode, get_emacs_theme_foreground, get_emacs_theme_background
 import abc
 import string
 import time
 
-qt_key_dict = {}
+from core.utils import *
+from PyQt6.QtCore import QEvent, Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QColor, QCursor, QFocusEvent, QKeyEvent
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
+
+QT_KEY_DICT = {}
 
 # Build char event.
 for char in string.ascii_lowercase:
     upper_char = char.upper()
-    qt_key_dict[char] = eval("Qt.Key_{}".format(upper_char))
-    qt_key_dict[upper_char] = eval("Qt.Key_{}".format(upper_char))
+    QT_KEY_DICT[char] = eval("Qt.Key.Key_{}".format(upper_char))
+    QT_KEY_DICT[upper_char] = eval("Qt.Key.Key_{}".format(upper_char))
 
 # Build number event.
 for number in range(0, 10):
-    qt_key_dict[str(number)] = eval("Qt.Key_{}".format(number))
+    QT_KEY_DICT[str(number)] = eval("Qt.Key.Key_{}".format(number))
 
-qt_key_dict.update({
-    ''':''': Qt.Key_Colon,
-    ''';''': Qt.Key_Semicolon,
-    '''.''': Qt.Key_Period,
-    ''',''': Qt.Key_Comma,
-    '''+''': Qt.Key_Plus,
-    '''-''': Qt.Key_Minus,
-    '''=''': Qt.Key_Equal,
-    '''_''': Qt.Key_Underscore,
-    '''[''': Qt.Key_BracketLeft,
-    ''']''': Qt.Key_BracketRight,
-    '''(''': Qt.Key_BraceLeft,
-    ''')''': Qt.Key_BraceRight,
-    '''{''': Qt.Key_ParenLeft,
-    '''}''': Qt.Key_ParenRight,
-    '''<''': Qt.Key_Less,
-    '''>''': Qt.Key_Greater,
-    '''@''': Qt.Key_At,
-    '''\\''': Qt.Key_Backslash,
-    '''|''': Qt.Key_Bar,
-    '''/''': Qt.Key_Slash,
-    '''#''': Qt.Key_NumberSign,
-    '''$''': Qt.Key_Dollar,
-    '''?''': Qt.Key_Question,
-    '''"''': Qt.Key_QuoteDbl,
-    '''`''': Qt.Key_QuoteLeft,
-    '''%''': Qt.Key_Percent,
-    '''^''': Qt.Key_AsciiCircum,
-    '''&''': Qt.Key_Ampersand,
-    '''*''': Qt.Key_Asterisk,
-    '''~''': Qt.Key_AsciiTilde,
-    '''!''': Qt.Key_Exclam,
-    '''\'''': Qt.Key_Apostrophe,
-    '''SPC''': Qt.Key_Space,
-    '''RET''': Qt.Key_Return,
-    '''DEL''': Qt.Key_Backspace,
-    '''TAB''': Qt.Key_Tab,
-    '''<backtab>''': Qt.Key_Backtab,
-    '''<home>''': Qt.Key_Home,
-    '''<end>''': Qt.Key_End,
-    '''<left>''': Qt.Key_Left,
-    '''<right>''': Qt.Key_Right,
-    '''<up>''': Qt.Key_Up,
-    '''<down>''': Qt.Key_Down,
-    '''<prior>''': Qt.Key_PageUp,
-    '''<next>''': Qt.Key_PageDown,
-    '''<delete>''': Qt.Key_Delete,
-    '''<backspace>''': Qt.Key_Backspace,
-    '''<return>''': Qt.Key_Return,
-    '''<escape>''': Qt.Key_Escape
+QT_KEY_DICT.update({
+    ''':''': Qt.Key.Key_Colon,
+    ''';''': Qt.Key.Key_Semicolon,
+    '''.''': Qt.Key.Key_Period,
+    ''',''': Qt.Key.Key_Comma,
+    '''+''': Qt.Key.Key_Plus,
+    '''-''': Qt.Key.Key_Minus,
+    '''=''': Qt.Key.Key_Equal,
+    '''_''': Qt.Key.Key_Underscore,
+    '''[''': Qt.Key.Key_BracketLeft,
+    ''']''': Qt.Key.Key_BracketRight,
+    '''(''': Qt.Key.Key_BraceLeft,
+    ''')''': Qt.Key.Key_BraceRight,
+    '''{''': Qt.Key.Key_ParenLeft,
+    '''}''': Qt.Key.Key_ParenRight,
+    '''<''': Qt.Key.Key_Less,
+    '''>''': Qt.Key.Key_Greater,
+    '''@''': Qt.Key.Key_At,
+    '''\\''': Qt.Key.Key_Backslash,
+    '''|''': Qt.Key.Key_Bar,
+    '''/''': Qt.Key.Key_Slash,
+    '''#''': Qt.Key.Key_NumberSign,
+    '''$''': Qt.Key.Key_Dollar,
+    '''?''': Qt.Key.Key_Question,
+    '''"''': Qt.Key.Key_QuoteDbl,
+    '''`''': Qt.Key.Key_QuoteLeft,
+    '''%''': Qt.Key.Key_Percent,
+    '''^''': Qt.Key.Key_AsciiCircum,
+    '''&''': Qt.Key.Key_Ampersand,
+    '''*''': Qt.Key.Key_Asterisk,
+    '''~''': Qt.Key.Key_AsciiTilde,
+    '''!''': Qt.Key.Key_Exclam,
+    '''\'''': Qt.Key.Key_Apostrophe,
+    '''SPC''': Qt.Key.Key_Space,
+    '''RET''': Qt.Key.Key_Return,
+    '''DEL''': Qt.Key.Key_Backspace,
+    '''TAB''': Qt.Key.Key_Tab,
+    '''<backtab>''': Qt.Key.Key_Backtab,
+    '''<home>''': Qt.Key.Key_Home,
+    '''<end>''': Qt.Key.Key_End,
+    '''<left>''': Qt.Key.Key_Left,
+    '''<right>''': Qt.Key.Key_Right,
+    '''<up>''': Qt.Key.Key_Up,
+    '''<down>''': Qt.Key.Key_Down,
+    '''<prior>''': Qt.Key.Key_PageUp,
+    '''<next>''': Qt.Key.Key_PageDown,
+    '''<delete>''': Qt.Key.Key_Delete,
+    '''<backspace>''': Qt.Key.Key_Backspace,
+    '''<return>''': Qt.Key.Key_Return,
+    '''<escape>''': Qt.Key.Key_Escape
 })
 
-qt_text_dict = {
-    "SPC": " "
+# NOTE:
+# We need convert return or backspace to correct text,
+# otherwise EAF browser will crash when user type return/backspace key.
+QT_TEXT_DICT = {
+    "SPC": " ",
+    "<return>": "RET",
+    "<backtab>": "",
+    "<home>": "",
+    "<end>": "",
+    "<left>": "",
+    "<right>": "",
+    "<up>": "",
+    "<down>": "",
+    "<prior>": "",
+    "<next>": "",
+    "<delete>": "",
+    "<backspace>": "",
+    "<escape>": ""
+}
+
+QT_MODIFIER_DICT = {
+    "C": Qt.KeyboardModifier.ControlModifier,
+    "M": Qt.KeyboardModifier.AltModifier,
+    "S": Qt.KeyboardModifier.ShiftModifier,
+    "s": Qt.KeyboardModifier.MetaModifier
 }
 
 class Buffer(QGraphicsScene):
     __metaclass__ = abc.ABCMeta
 
-    aspect_ratio_change = QtCore.pyqtSignal()
-    enter_fullscreen_request = QtCore.pyqtSignal()
-    exit_fullscreen_request = QtCore.pyqtSignal()
+    aspect_ratio_change = pyqtSignal()
+    enter_fullscreen_request = pyqtSignal()
+    exit_fullscreen_request = pyqtSignal()
 
     def __init__(self, buffer_id, url, arguments, fit_to_view):
         super(QGraphicsScene, self).__init__()
@@ -155,10 +178,11 @@ class Buffer(QGraphicsScene):
     def build_insert_or_do(self, method_name):
         ''' Build insert or do.'''
         def _do ():
-            if self.is_focus():
+            if self.is_focus():    # type: ignore
                 self.send_key(self.current_event_string)
             else:
                 getattr(self, method_name)()
+
         setattr(self, "insert_or_{}".format(method_name), _do)
 
     def toggle_fullscreen(self):
@@ -182,9 +206,39 @@ class Buffer(QGraphicsScene):
         '''
         Move cursor to bottom right corner of screen.
         '''
-        screen = qApp.primaryScreen()
-        QCursor().setPos(screen, screen.size().width(), screen.size().height())
+        screen = QApplication.instance().primaryScreen()    # type: ignore
+        try:
+            QCursor().setPos(screen, screen.size().width() - 1, screen.size().height() - 1)
+        except:
+            # Moves the cursor the primary screen to the global screen position (x, y).
+            # Sometimes, setPos(QScreen, Int, Int) API don't exists.
+            QCursor().setPos(screen.size().width() - 1, screen.size().height() - 1)
 
+    def move_cursor_to_nearest_border(self):
+        '''
+        Move cursor to nearest border of current buffer.
+        '''
+        # get current cursor position
+        cursor_pos = QCursor().pos()
+        # get current screen
+        screen = QApplication.instance().primaryScreen()    # type: ignore
+
+        c_x, c_y = cursor_pos.x(), cursor_pos.y()
+        sc_width, sc_height = screen.size().width(), screen.size().height()
+        left_dist, right_dist = c_x, sc_width - c_x
+        top_dist, bottom_dist = c_y, sc_height - c_y
+        min_dist = min(left_dist, right_dist, top_dist, bottom_dist)
+
+        # move cursor to nearest border
+        if min_dist == left_dist:
+            QCursor().setPos(0, c_y)
+        elif min_dist == right_dist:
+            QCursor().setPos(sc_width-1, c_y)
+        elif min_dist == top_dist:
+            QCursor().setPos(c_x, 0)
+        elif min_dist == bottom_dist:
+            QCursor().setPos(c_x, sc_height-1)
+        
     def set_aspect_ratio(self, aspect_ratio):
         ''' Set aspect ratio.'''
         self.aspect_ratio = aspect_ratio
@@ -229,13 +283,14 @@ class Buffer(QGraphicsScene):
 
     @abstract
     def resize_view(self):
-        pass
+        (_, _, width, height) = get_emacs_func_result("eaf-get-window-size-by-buffer-id", [self.buffer_id])
+        self.buffer_widget.resize(width, height)
 
     def get_key_event_widgets(self):
         ''' Get key event widgets.'''
         return [self.buffer_widget]
 
-    def send_input_message(self, message, callback_tag, input_type="string", initial_content=""):
+    def send_input_message(self, message, callback_tag, input_type="string", initial_content="", completion_list=[]):
         ''' Send an input message to Emacs side for the user to respond.
 
         MESSAGE is a message string that would be sent to the user.
@@ -246,7 +301,7 @@ class Buffer(QGraphicsScene):
 
         INITIAL_CONTENT is the intial content of the user response, it is only useful when INPUT_TYPE is "string".
         '''
-        input_message(self.buffer_id, message, callback_tag, input_type, initial_content)
+        input_message(self.buffer_id, message, callback_tag, input_type, initial_content, completion_list)
 
         if input_type == "marker" and (not hasattr(getattr(self, "fetch_marker_callback"), "abstract")):
             self.start_marker_input_monitor_thread(callback_tag)
@@ -258,13 +313,18 @@ class Buffer(QGraphicsScene):
         pass
 
     def start_marker_input_monitor_thread(self, callback_tag):
-        self.fetch_marker_input_thread = FetchMarkerInputThread(callback_tag, self.fetch_marker_callback)
+        self.fetch_marker_input_thread = FetchMarkerInputThread(callback_tag, self.fetch_marker_callback())
         self.fetch_marker_input_thread.match_marker.connect(self.handle_input_response)
         self.fetch_marker_input_thread.start()
 
     def stop_marker_input_monitor_thread(self):
-        if self.fetch_marker_input_thread != None and self.fetch_marker_input_thread.isRunning():
-            self.fetch_marker_input_thread.running_flag = False
+        if self.fetch_marker_input_thread is not None and self.fetch_marker_input_thread.isRunning():
+            self.fetch_marker_input_thread.stop()
+            # NOTE:
+            # We need call QThread.wait() function before reset QThread object to None.
+            # Set to None will trigger Python GC release QThread object, if QThread is still running,
+            # Segment falut "QThread: Destroyed while thread is still running" will throw, it will crash EAF.
+            self.fetch_marker_input_thread.wait()
             self.fetch_marker_input_thread = None
 
     def start_search_input_monitor_thread(self, callback_tag):
@@ -274,8 +334,13 @@ class Buffer(QGraphicsScene):
         self.fetch_search_input_thread.start()
 
     def stop_search_input_monitor_thread(self):
-        if self.fetch_search_input_thread != None and self.fetch_search_input_thread.isRunning():
+        if self.fetch_search_input_thread is not None and self.fetch_search_input_thread.isRunning():
             self.fetch_search_input_thread.stop()
+            # NOTE:
+            # We need call QThread.wait() function before reset QThread object to None.
+            # Set to None will trigger Python GC release QThread object, if QThread is still running,
+            # Segment falut "QThread: Destroyed while thread is still running" will throw, it will crash EAF.
+            self.fetch_search_input_thread.wait()
             self.fetch_search_input_thread = None
 
     @abstract
@@ -317,10 +382,6 @@ class Buffer(QGraphicsScene):
     def update_with_data(self, update_data):
         pass
 
-    def eval_function(self, function_name):
-        ''' Execute function.'''
-        getattr(self, function_name)()
-
     @abstract
     def eval_js_function(self, function_name, function_arguments):
         ''' Eval JavaScript function.'''
@@ -353,60 +414,46 @@ class Buffer(QGraphicsScene):
     def send_key_filter(self, event_string):
         pass
 
+    @PostGui()
     def send_key(self, event_string):
         ''' Fake key event.'''
         # Init.
-        text = event_string
-        modifier = Qt.NoModifier
+        text = QT_TEXT_DICT.get(event_string, event_string)
+        modifier = Qt.KeyboardModifier.NoModifier
 
-        # Get key text.
-        if event_string in qt_text_dict:
-            text = qt_text_dict[event_string]
-
-        if event_string in ["TAB", "<backtab>"]:
-            text = ""
-            if event_string == "<backtab>":
-                modifier = Qt.ShiftModifier
-        elif event_string.isupper():
-            modifier = Qt.ShiftModifier
-
-        # print("Press: ", event_string)
+        if event_string == "<backtab>" or (len(event_string) == 1 and event_string.isupper()):
+            modifier = Qt.KeyboardModifier.ShiftModifier
 
         # NOTE: don't ignore text argument, otherwise QWebEngineView not respond key event.
         try:
-            key_press = QKeyEvent(QEvent.KeyPress, qt_key_dict[event_string], modifier, text)
+            key_press = QKeyEvent(QEvent.Type.KeyPress, QT_KEY_DICT[event_string], modifier, text)
         except:
-            key_press = QKeyEvent(QEvent.KeyPress, Qt.Key_unknown, modifier, text)
+            key_press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_unknown, modifier, text)
 
         for widget in self.get_key_event_widgets():
-            QApplication.sendEvent(widget, key_press)
+            post_event(widget, key_press)
 
         self.send_key_filter(event_string)
 
+    @PostGui()
     def send_key_sequence(self, event_string):
         ''' Fake key sequence.'''
         event_list = event_string.split("-")
 
         if len(event_list) > 1:
-            for widget in [self.buffer_widget.focusProxy()]:
-                last_char = event_list[-1]
-                last_key = last_char
-                if len(last_char) == 1:
-                    last_key = last_char.lower()
+            widget = self.buffer_widget.focusProxy()
+            last_char = event_list[-1]
+            last_key = last_char.lower() if len(last_char) == 1 else last_char
 
-                modifiers = Qt.NoModifier
+            modifier_keys = [QT_MODIFIER_DICT.get(modifier) for modifier in event_list[0:-1]]
+            modifier_flags = Qt.KeyboardModifier.NoModifier
+            for modifier in modifier_keys:
+                modifier_flags |= modifier
 
-                for modifier in event_list[0:-1]:
-                    if modifier == "C":
-                        modifiers |= Qt.ControlModifier
-                    elif modifier == "M":
-                        modifiers |= Qt.AltModifier
-                    elif modifier == "S":
-                        modifiers |= Qt.ShiftModifier
-                    elif modifier == "s":
-                        modifiers |= Qt.MetaModifier
+            text = QT_TEXT_DICT.get(last_key, last_key)
 
-                QApplication.sendEvent(widget, QKeyEvent(QEvent.KeyPress, qt_key_dict[last_key], modifiers, last_key))
+            key_event = QKeyEvent(QEvent.Type.KeyPress, QT_KEY_DICT[last_key], modifier_flags, text)
+            post_event(widget, key_event)
 
     def get_url(self):
         ''' Get url.'''
@@ -435,57 +482,57 @@ class Buffer(QGraphicsScene):
         ''' Select right tab.'''
         eval_in_emacs('eaf-goto-right-tab', [])
 
+    @interactive
+    def update_theme(self):
+        self.theme_mode = get_emacs_theme_mode()
+        self.theme_foreground_color = get_emacs_theme_foreground()
+        self.theme_background_color = get_emacs_theme_background()
+
     def focus_widget(self, event=None):
         '''Focus buffer widget.'''
         if event is None:
-            event = QFocusEvent(QEvent.FocusIn, Qt.MouseFocusReason)
-        QApplication.sendEvent(self.buffer_widget.focusProxy(), event)
+            event = QFocusEvent(QEvent.Type.FocusIn, Qt.FocusReason.MouseFocusReason)
+
+        post_event(self.buffer_widget.focusProxy(), event)    # type: ignore
 
         # Activate emacs window when call focus widget, avoid first char is not
         eval_in_emacs('eaf-activate-emacs-window', [])
 
 class FetchMarkerInputThread(QThread):
 
-    match_marker = QtCore.pyqtSignal(str, str)
+    match_marker = pyqtSignal(str, str)
 
-    def __init__(self, callback_tag, fetch_marker_callback):
+    def __init__(self, callback_tag, markers):
         QThread.__init__(self)
 
         self.callback_tag = callback_tag
         self.running_flag = True
 
-        self.fetch_marker_callback = fetch_marker_callback
         self.marker_quit_keys = get_emacs_var("eaf-marker-quit-keys") or ""
-        self.markers = self.fetch_marker_callback()
+        self.markers = markers
 
     def run(self):
         while self.running_flag:
-            ## In some cases, the markers may not be ready when fetch_marker_callback is first called,
-            ## so we need to call fetch_marker_callback multiple times.
-            if self.markers is None or len(self.markers) == 0:
-                self.markers = self.fetch_marker_callback()
-            minibuffer_input = get_emacs_func_result("minibuffer-contents-no-properties", [])
+            if self.markers:
+                minibuffer_input = get_emacs_func_result("minibuffer-contents-no-properties", [])
 
-            marker_input_quit = len(minibuffer_input) > 0 and minibuffer_input[-1] in self.marker_quit_keys
-            marker_input_finish = minibuffer_input in self.markers
+                marker_input_quit = minibuffer_input and len(minibuffer_input) > 0 and minibuffer_input[-1] in self.marker_quit_keys
+                marker_input_finish = minibuffer_input in self.markers
 
-            if marker_input_quit:
-                self.running_flag = False
-                eval_in_emacs('exit-minibuffer', [])
-                message_to_emacs("Quit marker selection.")
-                self.match_marker.emit(self.callback_tag, minibuffer_input)
-            elif marker_input_finish:
-                self.running_flag = False
-                eval_in_emacs('exit-minibuffer', [])
-                message_to_emacs("Marker selected.")
-                self.match_marker.emit(self.callback_tag, minibuffer_input)
+                if marker_input_quit or marker_input_finish:
+                    self.running_flag = False
+                    eval_in_emacs('exit-minibuffer', [])
+                    message_to_emacs("Quit marker selection." if marker_input_quit else "Marker selected.")
 
             time.sleep(0.1)
 
+    def stop(self):
+        self.running_flag = False
+
 class FetchSearchInputThread(QThread):
 
-    search_changed = QtCore.pyqtSignal(str, str)
-    search_finish = QtCore.pyqtSignal(str)
+    search_changed = pyqtSignal(str, str)
+    search_finish = pyqtSignal(str)
 
     def __init__(self, callback_tag):
         QThread.__init__(self)

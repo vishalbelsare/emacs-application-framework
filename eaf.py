@@ -22,26 +22,20 @@
 # NOTE
 # QtWebEngine will throw error "ImportError: QtWebEngineWidgets must be imported before a QCoreApplication instance is created"
 # So we import browser module before start Qt application instance to avoid this error, but we never use this module.
-from PyQt5 import QtWebEngineWidgets as NeverUsed # noqa
+from PyQt6 import QtWebEngineWidgets as NeverUsed # noqa
 
-from PyQt5 import QtWidgets
-from PyQt5.QtCore import QLibraryInfo, QTimer
-from PyQt5.QtNetwork import QNetworkProxy, QNetworkProxyFactory
-from PyQt5.QtWidgets import QApplication
-from core.utils import PostGui, string_to_base64, eval_in_emacs, init_epc_client, close_epc_client, message_to_emacs, list_string_to_list, get_emacs_vars, get_emacs_config_dir, to_camel_case
-from core.view import View
+from PyQt6.QtNetwork import QNetworkProxy, QNetworkProxyFactory
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QTimer, QThread
+from core.utils import PostGui, eval_in_emacs, get_emacs_var, init_epc_client, close_epc_client, message_to_emacs, get_emacs_vars, get_emacs_config_dir
 from epc.server import ThreadingEPCServer
-from sys import version_info
-import importlib
 import json
-import logging
 import os
 import platform
-import socket
-import subprocess
 import threading
+
 if platform.system() == "Windows":
-    import pygetwindow as gw
+    import pygetwindow as gw    # type: ignore
 
 class EAF(object):
     def __init__(self, args):
@@ -53,9 +47,11 @@ class EAF(object):
         emacs_height = int(emacs_height)
 
         # Init variables.
-        self.module_dict = {}
+        self.views_data = None
         self.buffer_dict = {}
         self.view_dict = {}
+
+        self.thread_queue = []
 
         for name in ["scroll_other_buffer", "eval_js_function", "eval_js_code", "action_quit", "send_key", "send_key_sequence",
                      "handle_search_forward", "handle_search_backward", "set_focus_text"]:
@@ -68,16 +64,18 @@ class EAF(object):
         init_epc_client(int(emacs_server_port))
 
         # Build EPC server.
-        self.server = ThreadingEPCServer(('localhost', 0), log_traceback=True)
-        # self.server = ThreadingEPCServer(('localhost', 0)
-        # self.server.logger.setLevel(logging.DEBUG)
+        self.server = ThreadingEPCServer(('127.0.0.1', 0), log_traceback=True)
         self.server.allow_reuse_address = True
+
+        # import logging
+        # self.server = ThreadingEPCServer(('127.0.0.1', 0))
+        # self.server.logger.setLevel(logging.DEBUG)
 
         eaf_config_dir = get_emacs_config_dir()
         self.session_file = os.path.join(eaf_config_dir, "session.json")
 
         if not os.path.exists(eaf_config_dir):
-            os.makedirs(eaf_config_dir);
+            os.makedirs(eaf_config_dir)
 
         # ch = logging.FileHandler(filename=os.path.join(eaf_config_dir, 'epc_log.txt'), mode='w')
         # formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(lineno)04d | %(message)s')
@@ -116,9 +114,9 @@ class EAF(object):
 
         proxy = QNetworkProxy()
         if self.proxy[0] == "socks5":
-            proxy.setType(QNetworkProxy.Socks5Proxy)
+            proxy.setType(QNetworkProxy.ProxyType.Socks5Proxy)
         elif self.proxy[0] == "http":
-            proxy.setType(QNetworkProxy.HttpProxy)
+            proxy.setType(QNetworkProxy.ProxyType.HttpProxy)
         proxy.setHostName(self.proxy[1])
         proxy.setPort(int(self.proxy[2]))
 
@@ -131,7 +129,7 @@ class EAF(object):
         proxy_string = ""
 
         proxy = QNetworkProxy()
-        proxy.setType(QNetworkProxy.NoProxy)
+        proxy.setType(QNetworkProxy.ProxyType.NoProxy)
 
         self.is_proxy = False
         QNetworkProxy.setApplicationProxy(proxy)
@@ -145,10 +143,10 @@ class EAF(object):
     @PostGui()
     def update_buffer_with_url(self, module_path, buffer_url, update_data):
         ''' Update buffer with url '''
-        if type(buffer_id) == str and buffer_id in self.buffer_dict:
-            buffer = self.buffer_dict[buffer_id]
+        for buffer in list(self.buffer_dict.values()):
             if buffer.module_path == module_path and buffer.url == buffer_url:
                 buffer.update_with_data(update_data)
+                break
 
     @PostGui()
     def new_buffer(self, buffer_id, url, module_path, arguments):
@@ -160,16 +158,17 @@ class EAF(object):
     def create_buffer(self, buffer_id, url, module_path, arguments):
         ''' Create buffer.
         create_buffer can't wrap with @PostGui, because need call by createNewWindow signal of browser.'''
+        import importlib
+
         global emacs_width, emacs_height, proxy_string
 
-        # Load module with app absolute path.
-        if module_path in self.module_dict:
-            module = self.module_dict[module_path]
-        else:
-            spec = importlib.util.spec_from_file_location("AppBuffer", module_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            self.module_dict[module_path] = module
+        # Always load module with app absolute path.
+        #
+        # Don't cache module in memory,
+        # this is very convenient for EAF to load the latest application code in real time without the need for kill EAF process.
+        spec = importlib.util.spec_from_file_location("AppBuffer", module_path) # type: ignore
+        module = importlib.util.module_from_spec(spec) # type: ignore
+        spec.loader.exec_module(module)
 
         # Create application buffer.
         app_buffer = module.AppBuffer(buffer_id, url, arguments)
@@ -209,70 +208,86 @@ class EAF(object):
     @PostGui()
     def update_views(self, args):
         ''' Update views.'''
-        view_infos = args.split(",")
+        if args != self.views_data:
+            self.views_data = args
 
-        # Do something if buffer's all view hide after update_views operation.
-        old_view_buffer_ids = list(set(map(lambda v: v.buffer_id, self.view_dict.values())))
-        new_view_buffer_ids = list(set(map(lambda v: v.split(":")[0], view_infos)))
+            from core.view import View
 
-        # Call all_views_hide interface when buffer's all views will hide.
-        # We do something in app's buffer interface, such as videoplayer will pause video when all views hide.
-        # Note, we must call this function before last view destroy,
-        # such as QGraphicsVideoItem will report "Internal data stream error" error.
-        for old_view_buffer_id in old_view_buffer_ids:
-            if old_view_buffer_id not in new_view_buffer_ids:
-                if old_view_buffer_id in self.buffer_dict:
-                    self.buffer_dict[old_view_buffer_id].all_views_hide()
+            view_infos = args.split(",")
 
-        # Remove old key from view dict and destroy old view.
-        for key in list(self.view_dict):
-            if key not in view_infos:
-                self.destroy_view_later(key)
+            # Do something if buffer's all view hide after update_views operation.
+            old_view_buffer_ids = list(set(map(lambda v: v.buffer_id, self.view_dict.values())))
+            new_view_buffer_ids = list(set(map(lambda v: v.split(":")[0], view_infos)))
 
-        # NOTE:
-        # Create new view and REPARENT view to Emacs window.
-        if view_infos != ['']:
-            for view_info in view_infos:
-                if view_info not in self.view_dict:
-                    (buffer_id, _, _, _, _, _) = view_info.split(":")
-                    view = View(self.buffer_dict[buffer_id], view_info)
-                    self.view_dict[view_info] = view
+            # Call all_views_hide interface when buffer's all views will hide.
+            # We do something in app's buffer interface, such as videoplayer will pause video when all views hide.
+            # Note, we must call this function before last view destroy,
+            # such as QGraphicsVideoItem will report "Internal data stream error" error.
+            for old_view_buffer_id in old_view_buffer_ids:
+                if old_view_buffer_id not in new_view_buffer_ids:
+                    if old_view_buffer_id in self.buffer_dict:
+                        self.buffer_dict[old_view_buffer_id].all_views_hide()
 
-        # Call some_view_show interface when buffer's view switch back.
-        # Note, this must call after new view create, otherwise some buffer,
-        # such as QGraphicsVideoItem will report "Internal data stream error" error.
-        if view_infos != ['']:
-            for new_view_buffer_id in new_view_buffer_ids:
-                if new_view_buffer_id not in old_view_buffer_ids:
-                    if new_view_buffer_id in self.buffer_dict:
-                        self.buffer_dict[new_view_buffer_id].some_view_show()
+            # Remove old key from view dict and destroy old view.
+            for key in list(self.view_dict):
+                if key not in view_infos:
+                    self.destroy_view_later(key)
 
-        # Adjust buffer size along with views change.
-        # Note: just buffer that option `fit_to_view' is False need to adjust,
-        # if buffer option fit_to_view is True, buffer render adjust by view.resizeEvent()
-        for buffer in list(self.buffer_dict.values()):
-            if not buffer.fit_to_view:
-                buffer_views = list(filter(lambda v: v.buffer_id == buffer.buffer_id, list(self.view_dict.values())))
+            # NOTE:
+            # Create new view and REPARENT view to Emacs window.
+            if view_infos != ['']:
+                for view_info in view_infos:
+                    if view_info not in self.view_dict:
+                        (buffer_id, _, _, _, _, _) = view_info.split(":")
+                        try:
+                            view = View(self.buffer_dict[buffer_id], view_info)
+                            self.view_dict[view_info] = view
+                        except KeyError:
+                            # Hide all view, to switch *eaf* buffer.
+                            for key in self.view_dict:
+                                self.view_dict[key].hide()
 
-                # Adjust buffer size to max view's size.
-                if len(buffer_views) > 0:
-                    max_view = max(buffer_views, key=lambda v: v.width * v.height)
+                            eval_in_emacs('eaf--rebuild-buffer', [])
+                            message_to_emacs("Buffer id '{}' not exists".format(buffer_id))
+                            return
 
-                    buffer.buffer_widget.resize(max_view.width, max_view.height)
-                # Adjust buffer size to emacs window size if not match view found.
-                else:
-                    buffer.buffer_widget.resize(emacs_width, emacs_height)
+            # Call some_view_show interface when buffer's view switch back.
+            # Note, this must call after new view create, otherwise some buffer,
+            # such as QGraphicsVideoItem will report "Internal data stream error" error.
+            if view_infos != ['']:
+                for new_view_buffer_id in new_view_buffer_ids:
+                    if new_view_buffer_id not in old_view_buffer_ids:
+                        if new_view_buffer_id in self.buffer_dict:
+                            self.buffer_dict[new_view_buffer_id].some_view_show()
 
-                # Send resize signal to buffer.
-                buffer.resize_view()
+            # Adjust buffer size along with views change.
+            # Note: just buffer that option `fit_to_view' is False need to adjust,
+            # if buffer option fit_to_view is True, buffer render adjust by view.resizeEvent()
+            for buffer in list(self.buffer_dict.values()):
+                if not buffer.fit_to_view:
+                    buffer_views = list(filter(lambda v: v.buffer_id == buffer.buffer_id, list(self.view_dict.values())))
 
-        # NOTE:
-        # When you do switch buffer or kill buffer in Emacs, will call Python function 'update_views.
-        # Screen will flick if destroy old view BEFORE reparent new view.
-        #
-        # So we call function 'destroy_view_now' at last to make sure destroy old view AFTER reparent new view.
-        # Then screen won't flick.
-        self.destroy_view_now()
+                    # Adjust buffer size to max view's size.
+                    if len(buffer_views) > 0:
+                        max_view = max(buffer_views, key=lambda v: v.width * v.height)
+
+                        buffer.buffer_widget.width, buffer.buffer_widget.height = lambda: max_view.width, lambda: max_view.height
+                        buffer.buffer_widget.resize(max_view.width, max_view.height)
+                    # Adjust buffer size to emacs window size if not match view found.
+                    else:
+                        buffer.buffer_widget.width, buffer.buffer_widget.height = lambda: emacs_width, lambda: emacs_height
+                        buffer.buffer_widget.resize(emacs_width, emacs_height)
+
+                    # Send resize signal to buffer.
+                    buffer.resize_view()
+
+            # NOTE:
+            # When you do switch buffer or kill buffer in Emacs, will call Python function 'update_views.
+            # Screen will flick if destroy old view BEFORE reparent new view.
+            #
+            # So we call function 'destroy_view_now' at last to make sure destroy old view AFTER reparent new view.
+            # Then screen won't flick.
+            self.destroy_view_now()
 
     def destroy_view_later(self, key):
         '''Just record view id in global list 'destroy_view_list', and not destroy old view immediately.'''
@@ -291,6 +306,15 @@ class EAF(object):
 
         destroy_view_list = []
 
+    def button_press_on_eaf_window(self):
+        for key in self.buffer_dict:
+            buffer_widget = self.buffer_dict[key].buffer_widget
+
+            if hasattr(buffer_widget, "is_button_press") and buffer_widget.is_button_press:
+                return True
+
+        return False
+
     @PostGui()
     def kill_buffer(self, buffer_id):
         ''' Kill all view based on buffer_id and clean buffer from buffer dict.'''
@@ -308,6 +332,60 @@ class EAF(object):
             self.buffer_dict.pop(buffer_id, None)
 
     @PostGui()
+    def clip_buffer(self, buffer_id):
+        '''Clip the image of buffer for display.'''
+        eaf_config_dir = get_emacs_config_dir()
+        for key in list(self.view_dict):
+            view = self.view_dict[key]
+            if buffer_id == view.buffer_id:
+                view.screen_shot().save(os.path.join(eaf_config_dir, buffer_id + ".jpeg"))
+
+    @PostGui()
+    def screenshot_buffer(self, buffer_id):
+        import time
+
+        for key in list(self.view_dict):
+            view = self.view_dict[key]
+            if buffer_id == view.buffer_id:
+                current_timestamp = int(time.time())
+                formatted_time = time.strftime("%M:%S", time.localtime(current_timestamp))
+
+                image_path = os.path.join(os.path.expanduser("~"), buffer_id + "_" + formatted_time + ".png")
+                view.screen_shot().save(image_path)
+                message_to_emacs("Save screenshot at: {}".format(image_path))
+                return
+
+    @PostGui()
+    def ocr_buffer(self, buffer_id):
+        import tempfile
+
+        for key in list(self.view_dict):
+            view = self.view_dict[key]
+            if buffer_id == view.buffer_id:
+                image_path = os.path.join(tempfile.gettempdir(), buffer_id + ".png")
+                view.screen_shot().save(image_path)
+
+                thread = OCRThread(image_path)
+                self.thread_queue.append(thread)
+                thread.start()
+
+    @PostGui()
+    def show_buffer_view(self, buffer_id):
+        '''Show the single buffer view.'''
+        for key in list(self.view_dict):
+            view = self.view_dict[key]
+            if buffer_id == view.buffer_id:
+               view.try_show_top_view()
+
+    @PostGui()
+    def hide_buffer_view(self, buffer_id):
+        '''Hide the single buffer view.'''
+        for key in list(self.view_dict):
+            view = self.view_dict[key]
+            if buffer_id == view.buffer_id:
+               view.try_hide_top_view()
+
+    @PostGui()
     def kill_emacs(self):
         ''' Kill all buffurs from buffer dict.'''
         tmp_buffer_dict = {}
@@ -322,7 +400,7 @@ class EAF(object):
         def _do(*args):
             buffer_id = args[0]
 
-            if type(buffer_id) == str and buffer_id in self.buffer_dict:
+            if isinstance(buffer_id, str) and buffer_id in self.buffer_dict:
                 try:
                     getattr(self.buffer_dict[buffer_id], name)(*args[1:])
                 except AttributeError:
@@ -336,7 +414,7 @@ class EAF(object):
         def _do(*args):
             buffer_id = args[0]
 
-            if type(buffer_id) == str and buffer_id in self.buffer_dict:
+            if isinstance(buffer_id, str) and buffer_id in self.buffer_dict:
                 try:
                     return getattr(self.buffer_dict[buffer_id], name)(*args[1:])
                 except AttributeError:
@@ -350,11 +428,11 @@ class EAF(object):
     @PostGui()
     def eval_function(self, buffer_id, function_name, event_string):
         ''' Execute function and do not return anything. '''
-        if type(buffer_id) == str and buffer_id in self.buffer_dict:
+        if isinstance(buffer_id, str) and buffer_id in self.buffer_dict:
             try:
                 buffer = self.buffer_dict[buffer_id]
                 buffer.current_event_string = event_string
-                buffer.eval_function(function_name)
+                getattr(buffer, function_name)()
             except AttributeError:
                 import traceback
                 traceback.print_exc()
@@ -366,13 +444,16 @@ class EAF(object):
 
     def activate_emacs_win32_window(self, frame_title):
         if platform.system() == "Windows":
-            w = gw.getWindowsWithTitle(frame_title)
-            w[0].activate()
+            try:
+                w = gw.getWindowsWithTitle(frame_title)
+                w[0].activate()
+            except:
+                message_to_emacs('''Emacs title is empty cause EAF can not active Emacs window, plase add (setq frame-title-format "Emacs") in your config to active Emacs window.''')
 
     @PostGui()
     def handle_input_response(self, buffer_id, callback_tag, callback_result):
         ''' Handle input message for specified buffer.'''
-        if type(buffer_id) == str and buffer_id in self.buffer_dict:
+        if isinstance(buffer_id, str) and buffer_id in self.buffer_dict:
             buffer = self.buffer_dict[buffer_id]
 
             buffer.handle_input_response(callback_tag, callback_result)
@@ -381,7 +462,7 @@ class EAF(object):
     @PostGui()
     def cancel_input_response(self, buffer_id, callback_tag):
         ''' Cancel input message for specified buffer.'''
-        if type(buffer_id) == str and buffer_id in self.buffer_dict:
+        if isinstance(buffer_id, str) and buffer_id in self.buffer_dict:
             buffer = self.buffer_dict[buffer_id]
 
             buffer.cancel_input_response(callback_tag)
@@ -402,6 +483,9 @@ class EAF(object):
         ''' Open devtools tab'''
         self.devtools_page = web_page
         eval_in_emacs('eaf-open-devtool-page', [])
+
+        # We need adjust web window size after open developer tool.
+        QTimer().singleShot(1000, lambda : eval_in_emacs('eaf-monitor-configuration-change', []))
 
     def save_buffer_session(self, buf):
         ''' Save buffer session to file.'''
@@ -459,6 +543,60 @@ class EAF(object):
         '''Do some cleanup before exit python process.'''
         close_epc_client()
 
+OCR_ADJUST_DICT = {
+    " ,": ",",
+    "一一一": " ── "
+}
+
+class OCRThread(QThread):
+
+    def __init__(self, image_path):
+        QThread.__init__(self)
+
+        self.image_path = image_path
+
+    def adjust_ocr(self, ocr_string):
+        for char in OCR_ADJUST_DICT:
+            ocr_string = ocr_string.replace(char, OCR_ADJUST_DICT[char])
+
+        return ocr_string
+
+    def run(self):
+        try:
+            message_to_emacs("Use PaddleOCR analyze screenshot, it's need few seconds to analyze...")
+            import os
+            python_command = get_emacs_var("eaf-python-command")
+            command_string = "{} paddle_ocr.py {}".format(python_command, self.image_path)
+            cwd = os.path.join(os.path.dirname(__file__), "core")
+
+            import subprocess
+            process = subprocess.Popen(command_string, cwd=cwd, shell=True, text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process.wait()
+            string = process.stdout.readlines()[-1]    # type: ignore
+
+            eval_in_emacs("eaf-ocr-buffer-record", [self.adjust_ocr(string)])
+        except:
+            import traceback
+            traceback.print_exc()
+
+            message_to_emacs("Use EasyOCR analyze screenshot, it's need few seconds to analyze...")
+
+            try:
+                import easyocr
+                reader = easyocr.Reader(['ch_sim','en'])
+                result = reader.readtext(self.image_path)
+                string = ''.join(list(map(lambda r: r[1], result)))
+                eval_in_emacs("eaf-ocr-buffer-record", [self.adjust_ocr(string)])
+            except:
+                import traceback
+                traceback.print_exc()
+
+                message_to_emacs("Please use pip3 install PaddleOCR or EasyOCR first.")
+
+        import os
+        os.remove(self.image_path)
+
 if __name__ == "__main__":
     import sys
     import signal
@@ -476,9 +614,10 @@ if __name__ == "__main__":
             "--enable-gpu-rasterization",
             "--enable-native-gpu-memory-buffers"]
 
-    app = QApplication(sys.argv + ["--disable-web-security"] + hardware_acceleration_args)
+    app = QApplication(sys.argv + hardware_acceleration_args)
+    app.setApplicationName("eaf.py")
 
     eaf = EAF(sys.argv[1:])
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

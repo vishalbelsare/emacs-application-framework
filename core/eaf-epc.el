@@ -299,7 +299,7 @@ channel : Event channels for incoming messages."
 return eaf-epc-connection object."
   (eaf-epc-log ">> Connection start: %s:%s" host port)
   (let* ((connection-id (eaf-epc-uid))
-         (connection-name (format "epc con %s" connection-id))
+         (connection-name (format "eaf-epc con %s" connection-id))
          (connection-buf (eaf-epc-make-procbuf (format "*%s*" connection-name)))
          (connection-process
           (open-network-stream connection-name connection-buf host port))
@@ -469,9 +469,6 @@ docstring  : docstring (one string) ex: \"A test function. Return sum of A,B,C a
   "[internal] A list of `eaf-epc-manager' objects.
 those objects currently connect to the epc peer.
 This variable is for debug purpose.")
-
-(defun eaf-epc-server-process-name (uid)
-  (format "eaf-epc-server:%s" uid))
 
 (defun eaf-epc-stop-epc (mngr)
   "Disconnect the connection for the server."
@@ -692,7 +689,7 @@ This variable is used for the management purpose.")
   "[internal] Initialize the process and return eaf-epc-manager object."
   (eaf-epc-log "EAF-EPC-SERVER- >> Connection accept: %S" process)
   (let* ((connection-id (eaf-epc-uid))
-         (connection-name (format "epc con %s" connection-id))
+         (connection-name (format "eaf-epc con %s" connection-id))
          (channel (list connection-name nil))
          (connection (make-eaf-epc-connection
                       :name connection-name
@@ -704,6 +701,7 @@ This variable is used for the management purpose.")
     (set-process-filter process
                         (lambda (p m)
                           (eaf-epc-process-filter connection p m)))
+    (set-process-query-on-exit-flag process nil)
     (set-process-sentinel process
                           (lambda (p e)
                             (eaf-epc-process-sentinel connection p e)))
@@ -744,7 +742,7 @@ This variable is used for the management purpose.")
   "Start TCP Server and return the main process object."
   (let*
       ((connect-function connect-function)
-       (name (format "EPC Server %s" (eaf-epc-uid)))
+       (name (format "EAF EPC Server %s" (eaf-epc-uid)))
        (buf (eaf-epc-make-procbuf (format " *%s*" name)))
        (main-process
         (make-network-process
@@ -754,6 +752,7 @@ This variable is used for the management purpose.")
          :server t
          :host "127.0.0.1"
          :service (or port t)
+         :noquery t
          :sentinel
          (lambda (process message)
            (eaf-epc-server-sentinel process message connect-function)))))
